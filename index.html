@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>お薬リマインダー（写真付き＋ダークモード対応）</title>
+  <title>お薬リマインダー（ファイル確認機能付き）</title>
   <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/590/590685.png">
   <style>
     :root {
@@ -41,7 +41,7 @@
       margin-bottom: 15px;
       font-size: 18px;
     }
-    input[type="text"], input[type="time"], input[type="file"] {
+    input[type="text"], input[type="time"] {
       width: 100%;
       max-width: 300px;
       padding: 10px;
@@ -105,14 +105,8 @@
       background-color: var(--secondary-bg);
       color: var(--primary-color);
     }
-    td img {
-      width: 60px;
-      height: 60px;
-      object-fit: cover;
-      border-radius: 6px;
-    }
     @media (max-width: 600px) {
-      input[type="text"], input[type="time"], input[type="file"] {
+      input[type="text"], input[type="time"] {
         max-width: 100%;
       }
       button {
@@ -135,9 +129,6 @@
     <label>通知時間:
       <input type="time" id="medicineTime" />
     </label>
-    <label>薬の写真:
-      <input type="file" id="medicineImage" accept="image/*" capture="environment">
-    </label>
     <div>
       <span style="font-weight: bold;">曜日選択:</span><br>
       <label class="weekday-label"><input type="checkbox" value="日">日</label>
@@ -153,6 +144,7 @@
     <input type="file" id="restoreFile" accept=".json" style="display:none" onchange="restoreData(event)">
     <button onclick="document.getElementById('restoreFile').click()">📂 復元</button>
   </div>
+
   <table>
     <thead>
       <tr>
@@ -160,290 +152,59 @@
         <th>時間</th>
         <th>曜日</th>
         <th>服用</th>
-        <th>画像</th>
         <th>操作</th>
       </tr>
     </thead>
     <tbody id="medicineTableBody"></tbody>
   </table>
 
-  <script>
-    const STORAGE_KEY = "medicines";
-    let medicines = [];
-    let editIndex = -1;
+<script>
+const STORAGE_KEY = "medicines";
+let medicines = [];
+let editIndex = -1;
 
-    function setCookie(name, value, days) {
-      const expires = new Date(Date.now() + days * 86400000).toUTCString();
-      document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/`;
-    }
-    function getCookie(name) {
-      const cookies = document.cookie.split("; ");
-      for (const c of cookies) {
-        const [key, val] = c.split("=");
-        if (key === name) return decodeURIComponent(val);
-      }
-      return null;
-    }
-    function loadData() {
-      const saved = getCookie(STORAGE_KEY);
-      if (saved) {
-        try {
-          medicines = JSON.parse(saved);
-        } catch {
-          medicines = [];
-        }
-      }
-    }
-    function saveData() {
-      setCookie(STORAGE_KEY, JSON.stringify(medicines), 365);
-    }
-    function saveAndRender() {
-      saveData();
-      renderTable();
-    }
-    function renderTable() {
-      const tbody = document.getElementById("medicineTableBody");
-      tbody.innerHTML = "";
-      medicines.forEach((med, i) => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${med.name}</td>
-          <td>${med.time}</td>
-          <td>${med.days.join(",")}</td>
-          <td><input type="checkbox" ${med.checked ? "checked" : ""} onchange="toggleCheck(${i}, this.checked)"></td>
-          <td>${med.image ? `<img src="${med.image}">` : "なし"}</td>
-          <td>
-            <button onclick="editMedicine(${i})">編集</button>
-            <button onclick="deleteMedicine(${i})">削除</button>
-          </td>
-        `;
-        tbody.appendChild(row);
-      });
-    }
-
-    function getSelectedDays() {
-      const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
-      return Array.from(checkboxes).map(cb => cb.value);
-    }
-    function setSelectedDays(days) {
-      const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-      checkboxes.forEach(cb => {
-        cb.checked = days.includes(cb.value);
-      });
-    }
-    function clearInputs() {
-      document.getElementById("medicineName").value = "";
-      document.getElementById("medicineTime").value = "";
-      document.getElementById("medicineImage").value = "";
-      document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-      editIndex = -1;
-    }
-
-    function toggleCheck(index, checked) {
-      medicines[index].checked = checked;
-      saveData();
-    }
-
-    function addOrUpdateMedicine() {
-  const name = document.getElementById("medicineName").value.trim();
-  const time = document.getElementById("medicineTime").value;
-  const days = getSelectedDays();
-  const file = document.getElementById("medicineImage").files[0];
-
-  if (!name || !time || days.length === 0) {
-    alert("薬の名前・時間・曜日をすべて入力してください。");
-    return;
+function setCookie(name, value, days) {
+  const expires = new Date(Date.now() + days * 86400000).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/`;
+}
+function getCookie(name) {
+  const cookies = document.cookie.split("; ");
+  for (const c of cookies) {
+    const [key, val] = c.split("=");
+    if (key === name) return decodeURIComponent(val);
   }
-
-  const processEntry = (imageDataUrl = null) => {
-    const newEntry = {
-      name,
-      time,
-      days,
-      checked: false,
-      image: imageDataUrl,
-      confirmed: false,
-      notifiedAt: null,
-    };
-    if (editIndex >= 0) {
-      medicines[editIndex] = newEntry;
-    } else {
-      medicines.push(newEntry);
+  return null;
+}
+function loadData() {
+  const saved = getCookie(STORAGE_KEY);
+  if (saved) {
+    try {
+      medicines = JSON.parse(saved);
+    } catch {
+      medicines = [];
     }
-    clearInputs();
-    saveAndRender();
-  };
-
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = () => processEntry(reader.result);
-    reader.readAsDataURL(file);
-  } else {
-    processEntry(null); // 画像なしでも登録可能に
   }
 }
-
-
-    function editMedicine(index) {
-      const med = medicines[index];
-      document.getElementById("medicineName").value = med.name;
-      document.getElementById("medicineTime").value = med.time;
-      setSelectedDays(med.days);
-      editIndex = index;
-    }
-
-    function deleteMedicine(index) {
-      medicines.splice(index, 1);
-      saveAndRender();
-    }
-
-    function requestPermission() {
-      if (Notification.permission === "default") {
-        Notification.requestPermission();
-      }
-    }
-
-    function startNotificationChecker() {
-      setInterval(() => {
-        const now = new Date();
-        const nowStr = now.toTimeString().slice(0, 5);
-        const today = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
-        medicines.forEach(med => {
-          if (med.time === nowStr && med.days.includes(today) && !med.checked) {
-            new Notification("💊 お薬の時間です！", {
-              body: `${med.name}を飲む時間です`,
-              icon: med.image || "https://cdn-icons-png.flaticon.com/512/590/590685.png"
-            });
-          }
-        });
-      }, 60000);
-    }
-
-    function toggleTheme() {
-      const body = document.body;
-      body.classList.toggle("dark");
-      localStorage.setItem("theme", body.classList.contains("dark") ? "dark" : "light");
-    }
-
-    function loadTheme() {
-      const saved = localStorage.getItem("theme");
-      if (saved === "dark") {
-        document.body.classList.add("dark");
-      }
-    }
-
-    function backupData() {
-      const blob = new Blob([JSON.stringify(medicines, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "medicines_backup.json";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    function restoreData(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = JSON.parse(e.target.result);
-          if (Array.isArray(data)) {
-            medicines = data;
-            saveData();
-            renderTable();
-            alert("復元が完了しました。");
-          } else {
-            alert("不正なファイル形式です。");
-          }
-        } catch {
-          alert("読み込みに失敗しました。");
-        }
-      };
-      reader.readAsText(file);
-    }
-
-    function resetWeeklyChecks() {
-      const lastReset = getCookie("lastResetDate");
-      const today = new Date();
-      const todayStr = today.toISOString().slice(0, 10);
-      if (today.getDay() === 0 && lastReset !== todayStr) {
-        medicines.forEach(m => m.checked = false);
-        setCookie("lastResetDate", todayStr, 7);
-        saveAndRender();
-      }
-    }
-
-    function init() {
-      loadTheme();
-      loadData();
-      renderTable();
-      requestPermission();
-      startNotificationChecker();
-      resetWeeklyChecks();
-    }
-    init();
-
-
-function startNotificationChecker() {
-  setInterval(() => {
-    const now = new Date();
-    const nowStr = now.toTimeString().slice(0, 5);
-    const today = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
-
-    medicines.forEach((med, i) => {
-      if (!med.confirmed && med.days.includes(today)) {
-        // 初回 or 再通知タイミング
-        const shouldNotify =
-          (med.time === nowStr && !med.notifiedAt) ||
-          (med.notifiedAt && Math.floor((Date.now() - med.notifiedAt) / 60000) >= 1);
-
-        if (shouldNotify) {
-          new Notification("💊 お薬の時間です！", {
-            body: `${med.name}を飲んだら写真をアップロードしてください`,
-            icon: med.image || "https://cdn-icons-png.flaticon.com/512/590/590685.png"
-          });
-          medicines[i].notifiedAt = Date.now();
-          saveData();
-        }
-      }
-    });
-  }, 60000);
+function saveData() {
+  setCookie(STORAGE_KEY, JSON.stringify(medicines), 365);
 }
-
-// 写真確認アップロード処理
-function confirmIntake(index, imageFile) {
-  const reader = new FileReader();
-  reader.onload = () => {
-    medicines[index].confirmationImage = reader.result;
-    medicines[index].confirmed = true;
-    medicines[index].confirmedAt = Date.now();  // ← ここを追加
-    medicines[index].notifiedAt = null;
-    saveAndRender();
-    alert("服用が確認されました。");
-  };
-  reader.readAsDataURL(imageFile);
+function saveAndRender() {
+  saveData();
+  renderTable();
 }
-
-// テーブルの描画変更
 function renderTable() {
   const tbody = document.getElementById("medicineTableBody");
   tbody.innerHTML = "";
   medicines.forEach((med, i) => {
-    const confirmButton = med.confirmed
-      ? "✅ 済"
-      : `<input type="file" accept="image/*" onchange="confirmIntake(${i}, this.files[0])">`;
-
+    const fileButton = med.uploadedFile ? `<button onclick="viewFile(${i})">確認</button>` : `<input type="file" onchange="uploadFile(${i}, this.files[0])">`;
     const row = document.createElement("tr");
     row.innerHTML = `
       <td>${med.name}</td>
       <td>${med.time}</td>
       <td>${med.days.join(",")}</td>
       <td><input type="checkbox" ${med.checked ? "checked" : ""} onchange="toggleCheck(${i}, this.checked)"></td>
-      <td>${med.image ? `<img src="${med.image}">` : "なし"}</td>
       <td>
-        ${confirmButton}<br>
+        ${fileButton}<br>
         <button onclick="editMedicine(${i})">編集</button>
         <button onclick="deleteMedicine(${i})">削除</button>
       </td>
@@ -451,29 +212,132 @@ function renderTable() {
     tbody.appendChild(row);
   });
 }
-
-
-
-function resetOldConfirmations() {
-  const now = Date.now();
-  const SIX_DAYS_MS = 6 * 24 * 60 * 60 * 1000;
-
-  medicines.forEach(med => {
-    if (med.confirmed && med.confirmedAt && (now - med.confirmedAt > SIX_DAYS_MS)) {
-      med.confirmed = false;
-      med.confirmationImage = null;
-      med.confirmedAt = null;
-    }
-  });
-
+function getSelectedDays() {
+  return Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+}
+function setSelectedDays(days) {
+  document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = days.includes(cb.value));
+}
+function clearInputs() {
+  document.getElementById("medicineName").value = "";
+  document.getElementById("medicineTime").value = "";
+  document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+  editIndex = -1;
+}
+function toggleCheck(index, checked) {
+  medicines[index].checked = checked;
+  saveData();
+}
+function addOrUpdateMedicine() {
+  const name = document.getElementById("medicineName").value.trim();
+  const time = document.getElementById("medicineTime").value;
+  const days = getSelectedDays();
+  if (!name || !time || days.length === 0) {
+    alert("薬の名前・時間・曜日をすべて入力してください。");
+    return;
+  }
+  const newEntry = {
+    name,
+    time,
+    days,
+    checked: false,
+    uploadedFile: null,
+    fileType: null
+  };
+  if (editIndex >= 0) medicines[editIndex] = newEntry;
+  else medicines.push(newEntry);
+  clearInputs();
   saveAndRender();
 }
-
-
-
-
-
-
-  </script>
+function uploadFile(index, file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    medicines[index].uploadedFile = reader.result;
+    medicines[index].fileType = file.type;
+    saveAndRender();
+  };
+  reader.readAsDataURL(file);
+}
+function viewFile(index) {
+  const fileData = medicines[index].uploadedFile;
+  const fileType = medicines[index].fileType;
+  if (!fileData) return alert("ファイルが存在しません。");
+  const w = window.open();
+  if (fileType.startsWith("image/")) w.document.write(`<img src="${fileData}">`);
+  else if (fileType === "application/pdf") w.document.write(`<iframe src="${fileData}" style="width:100%;height:100%"></iframe>`);
+  else w.document.write(`<pre>${atob(fileData.split(',')[1])}</pre>`);
+}
+function editMedicine(index) {
+  const med = medicines[index];
+  document.getElementById("medicineName").value = med.name;
+  document.getElementById("medicineTime").value = med.time;
+  setSelectedDays(med.days);
+  editIndex = index;
+}
+function deleteMedicine(index) {
+  medicines.splice(index, 1);
+  saveAndRender();
+}
+function requestPermission() {
+  if (Notification.permission === "default") Notification.requestPermission();
+}
+function startNotificationChecker() {
+  setInterval(() => {
+    const nowStr = new Date().toTimeString().slice(0,5);
+    const today = ["日","月","火","水","木","金","土"][new Date().getDay()];
+    medicines.forEach(med => {
+      if (med.time === nowStr && med.days.includes(today) && !med.checked) {
+        new Notification("💊 お薬の時間です！", {
+          body: `${med.name}を飲む時間です`,
+          icon: "https://cdn-icons-png.flaticon.com/512/590/590685.png"
+        });
+      }
+    });
+  }, 60000);
+}
+function toggleTheme() {
+  document.body.classList.toggle("dark");
+  localStorage.setItem("theme", document.body.classList.contains("dark") ? "dark" : "light");
+}
+function loadTheme() {
+  if (localStorage.getItem("theme") === "dark") document.body.classList.add("dark");
+}
+function backupData() {
+  const blob = new Blob([JSON.stringify(medicines, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "medicines_backup.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+function restoreData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (Array.isArray(data)) {
+        medicines = data;
+        saveData();
+        renderTable();
+        alert("復元が完了しました。");
+      } else alert("不正なファイル形式です。");
+    } catch {
+      alert("読み込みに失敗しました。");
+    }
+  };
+  reader.readAsText(file);
+}
+function init() {
+  loadTheme();
+  loadData();
+  renderTable();
+  requestPermission();
+  startNotificationChecker();
+}
+init();
+</script>
 </body>
 </html>
